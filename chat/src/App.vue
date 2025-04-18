@@ -54,7 +54,14 @@
     <div class="main">
       <div v-if="quizWarning" class="quiz-warning-banner">
         ❗ Bitte beantworte zuerst die aktuelle Quizfrage.
+
+      </div><div v-if="showQuizResultPopup" class="quiz-result-popup">
+        <p>
+          🎉 Du hast {{ correctAnswers }}/10 Fragen richtig beantwortet ({{ correctPercentage }}%)
+        </p>
+          <button @click="closeQuizResult">Weiter</button>
       </div>
+
       <div v-if="showChatRating && !chatRated" class="chat-rating-banner">
         <p>Wie zufrieden bist du mit dem Chat?</p>
         <button @click="submitChatRating('up')">😊</button>
@@ -224,6 +231,9 @@ export default {
       chatRatings: {},
       showChatRating: false,
       chatRated: false,
+      quizResults: [],
+      showQuizResultPopup: false,
+
       availableModels: {
         openai: ['gpt-4o', 'gpt-3.5-turbo'],
         groq: [
@@ -257,6 +267,15 @@ export default {
       this.model = this.availableModels[newProvider][0];
     }
   },
+  computed: {
+  correctAnswers() {
+    return this.quizResults.filter(r => r).length;
+  },
+  correctPercentage() {
+    return Math.round((this.correctAnswers / 10) * 100);
+  }
+},
+
   methods: {
     selectUseCase(caseName) {
       this.useCase = caseName;
@@ -273,6 +292,11 @@ export default {
       if (!this.query || !this.useCase || (this.useCase === 'Quiz' && !this.selectedTopic && !this.customTopic)) return;
       this.sendQuery();
     },
+    closeQuizResult() {
+      this.showQuizResultPopup = false;
+      this.quizResults = [];
+    },
+
     showQuizWarning() {
     this.quizWarning = true;
     setTimeout(() => {
@@ -297,7 +321,7 @@ export default {
   if (!this.query && this.useCase !== 'Quiz') return;
   this.messages.push({ sender: 'user', type: 'text', text: this.query });
 
-  const response = await fetch('http://localhost:8033/api/process_query', {
+  const response = await fetch('https://it-services-team-paiya.htsago-dev.tech/api/process_query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -389,10 +413,21 @@ export default {
         });
     },
 
-    checkAnswer(quiz, selectedOption) {
-      if (quiz.selected !== null) return;
-      quiz.selected = selectedOption;
-    },
+checkAnswer(quiz, selectedOption) {
+  if (quiz.selected !== null) return;
+
+  quiz.selected = selectedOption;
+  const isCorrect = selectedOption === quiz.answer;
+
+  this.quizResults.push(isCorrect);
+
+
+  if (this.quizResults.length === 10) {
+    setTimeout(() => {
+      this.showQuizResultPopup = true;
+    }, 500);
+  }
+},
 
     rateMessage(index, value) {
       this.chatRatings[index] = value;
@@ -405,7 +440,7 @@ export default {
         feedback: this.feedback
       };
 
-      fetch('http://localhost:8033/api/store_feedback', {
+      fetch('https://it-services-team-paiya.htsago-dev.tech/api/store_feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -843,6 +878,35 @@ html, body {
   10%, 90% { opacity: 1; transform: translate(-50%, -50%); }
   100% { opacity: 0; transform: translate(-50%, -40%); }
 }
+.quiz-result-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #004080;
+  color: white;
+  padding: 2rem;
+  border-radius: 12px;
+  z-index: 9999;
+  text-align: center;
+  box-shadow: 0 0 20px rgba(0,0,0,0.3);
+  animation: fadeInOutPopup 0.3s ease-in-out;
+}
 
+.quiz-result-popup button {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background-color: white;
+  color: #004080;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+@keyframes fadeInOutPopup {
+  from { opacity: 0; transform: translate(-50%, -60%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
 </style>
 
