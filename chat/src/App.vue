@@ -67,6 +67,12 @@
         <button @click="submitChatRating('up')">😊</button>
         <button @click="submitChatRating('down')">🙁</button>
       </div>
+      <div v-if="showInfoModal" class="usecase-info-modal">
+        <h3>{{ useCases[useCase]?.name }}</h3>
+        <p>{{ infoTexts[useCase] }}</p>
+        <button @click="acknowledgeInfo">Got it!</button>
+      </div>
+
 
       <div class="header">
         <h3>Willkommen bei HBVGPT</h3>
@@ -234,6 +240,22 @@ export default {
       quizResults: [],
       showQuizResultPopup: false,
 
+      infoAcknowledged: {
+        Summary: false,
+        Quiz: false,
+        FreePrompt: false,
+        FunFact: false
+      },
+      showInfoModal: false,
+      infoTexts: {
+        Summary: "Mit dieser Funktion kannst du beliebige Texte automatisch zusammenfassen lassen – in kurz, mittel oder lang.",
+        Quiz: "Lass dich ein Quiz zu deinem Wunschthema erstellen und teste dein Wissen mit 10 Fragen! Einfach ein Thema auswählen oder dein eigenes Thema eingeben.",
+        FreePrompt: "Chatte einfach mit paiya.ia!",
+        FunFact: "Gib nur ein Wort ein und erhalte interessante Fakten zu verschiedenen Themen – mit Quellenangabe!"
+      },
+
+
+
       availableModels: {
         openai: ['gpt-4o', 'gpt-3.5-turbo'],
         groq: [
@@ -279,6 +301,14 @@ export default {
   methods: {
     selectUseCase(caseName) {
       this.useCase = caseName;
+      if (!this.infoAcknowledged[caseName]) {
+        this.showInfoModal = true;
+        return;
+      }
+
+      this.resetState();
+    },
+    resetState() {
       this.messages = [];
       this.query = '';
       this.length = '';
@@ -288,6 +318,12 @@ export default {
       this.chatRated = false;
       this.showChatRating = false;
     },
+    acknowledgeInfo() {
+      this.infoAcknowledged[this.useCase] = true;
+      this.showInfoModal = false;
+      this.resetState();
+    },
+
     handleEnter() {
       if (!this.query || !this.useCase || (this.useCase === 'Quiz' && !this.selectedTopic && !this.customTopic)) return;
       this.sendQuery();
@@ -321,7 +357,7 @@ export default {
   if (!this.query && this.useCase !== 'Quiz') return;
   this.messages.push({ sender: 'user', type: 'text', text: this.query });
 
-  const response = await fetch('https://it-services-team-paiya.htsago-dev.tech/api/process_query', {
+  const response = await fetch('http://localhost:8033/api/process_query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -440,7 +476,7 @@ checkAnswer(quiz, selectedOption) {
         feedback: this.feedback
       };
 
-      fetch('https://it-services-team-paiya.htsago-dev.tech/api/store_feedback', {
+      fetch('http://localhost:8033/api/store_feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -908,5 +944,32 @@ html, body {
   from { opacity: 0; transform: translate(-50%, -60%); }
   to   { opacity: 1; transform: translate(-50%, -50%); }
 }
+.usecase-info-modal {
+  position: fixed;
+  top: 50%;
+  left: 60%;
+  transform: translate(-50%, -50%);
+  background: #004080;
+  color: white;
+  padding: 2rem;
+  border-radius: 12px;
+  z-index: 9999;
+  text-align: center;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.3);
+}
+
+.usecase-info-modal button {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background-color: white;
+  color: #004080;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
 </style>
 
