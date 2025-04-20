@@ -515,6 +515,17 @@ checkAnswer(quiz, selectedOption) {
   box-sizing: border-box;
 }
 
+:root {
+  --main-bg: #f0f4fa;
+  --sidebar-bg: #002c5f;
+  --primary-blue: #004080;
+  --primary-hover: #0055aa;
+  --bot-bubble: #e0e9f7;
+  --user-bubble: #6f96c1;
+  --quiz-yellow: #fff3cd;
+  --quiz-border: #ffeeba;
+}
+
 html, body {
   position: fixed;
   inset: 0; /* top, right, bottom, left = 0 */
@@ -525,6 +536,16 @@ html, body {
   font-family: Arial, sans-serif;
   background: #f3f3f3;
   overflow: hidden;
+}
+body {
+  background: var(--main-bg) !important;
+  color: #000 !important;
+}
+
+* {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #app {
@@ -556,7 +577,7 @@ html, body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #f0f4fa;
+  background-color: var(--main-bg);
   height: 100%;
   overflow: hidden;
 }
@@ -694,7 +715,7 @@ html, body {
 .quiz-box button {
   padding: 0.5rem 1rem;
   font-size: 1rem;
-  background-color: #004080;
+  background-color: var(--primary-blue);
   color: white;
   border: none;
   border-radius: 5px;
