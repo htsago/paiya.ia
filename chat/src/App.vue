@@ -186,7 +186,7 @@
 
           <div v-if="useCase === 'Quiz'">
             <label style="font-weight: bold;">📚 Thema wählen:</label>
-            <select v-model="selectedTopic">
+            <select v-model="selectedTopic" :disabled="isChatLocked">
               <option disabled value="">Thema auswählen</option>
               <option v-for="topic in topics" :key="topic" :value="topic">{{ topic }}</option>
               <option value="custom">Anderes Thema...</option>
@@ -205,11 +205,12 @@
             v-model="query"
             rows="2"
             placeholder="Deine Eingabe..."
-            :disabled="!useCase"
+            :disabled="!useCase || isChatLocked"
             @keyup.enter.exact="handleEnter"
-          ></textarea>
+          />
 
-          <button @click="sendQuery">Senden</button>
+
+          <button @click="sendQuery" :disabled="isChatLocked">Senden</button>
         </div>
       </div>
     </div>
@@ -295,7 +296,12 @@ export default {
   },
   correctPercentage() {
     return Math.round((this.correctAnswers / 10) * 100);
+  },
+
+    isChatLocked() {
+    return this.useCase && !this.infoAcknowledged[this.useCase];
   }
+
 },
 
   methods: {
