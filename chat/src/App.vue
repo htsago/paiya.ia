@@ -186,7 +186,7 @@
 
           <div v-if="useCase === 'Quiz'">
             <label style="font-weight: bold;">📚 Thema wählen:</label>
-            <select v-model="selectedTopic">
+            <select v-model="selectedTopic" :disabled="isChatLocked">
               <option disabled value="">Thema auswählen</option>
               <option v-for="topic in topics" :key="topic" :value="topic">{{ topic }}</option>
               <option value="custom">Anderes Thema...</option>
@@ -205,11 +205,12 @@
             v-model="query"
             rows="2"
             placeholder="Deine Eingabe..."
-            :disabled="!useCase"
+            :disabled="!useCase || isChatLocked"
             @keyup.enter.exact="handleEnter"
-          ></textarea>
+          />
 
-          <button @click="sendQuery">Senden</button>
+
+          <button @click="sendQuery" :disabled="isChatLocked">Senden</button>
         </div>
       </div>
     </div>
@@ -295,7 +296,12 @@ export default {
   },
   correctPercentage() {
     return Math.round((this.correctAnswers / 10) * 100);
+  },
+
+    isChatLocked() {
+    return this.useCase && !this.infoAcknowledged[this.useCase];
   }
+
 },
 
   methods: {
@@ -509,6 +515,17 @@ checkAnswer(quiz, selectedOption) {
   box-sizing: border-box;
 }
 
+:root {
+  --main-bg: #f0f4fa;
+  --sidebar-bg: #002c5f;
+  --primary-blue: #004080;
+  --primary-hover: #0055aa;
+  --bot-bubble: #e0e9f7;
+  --user-bubble: #6f96c1;
+  --quiz-yellow: #fff3cd;
+  --quiz-border: #ffeeba;
+}
+
 html, body {
   position: fixed;
   inset: 0; /* top, right, bottom, left = 0 */
@@ -519,6 +536,16 @@ html, body {
   font-family: Arial, sans-serif;
   background: #f3f3f3;
   overflow: hidden;
+}
+body {
+  background: var(--main-bg) !important;
+  color: #000 !important;
+}
+
+* {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #app {
@@ -550,7 +577,7 @@ html, body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #f0f4fa;
+  background-color: var(--main-bg);
   height: 100%;
   overflow: hidden;
 }
@@ -688,7 +715,7 @@ html, body {
 .quiz-box button {
   padding: 0.5rem 1rem;
   font-size: 1rem;
-  background-color: #004080;
+  background-color: var(--primary-blue);
   color: white;
   border: none;
   border-radius: 5px;
