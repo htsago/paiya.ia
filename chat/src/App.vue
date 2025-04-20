@@ -75,8 +75,8 @@
 
 
       <div class="header">
-        <h3>Willkommen bei HBVGPT</h3>
-        <p>Nutze KI, um deinen Arbeitsalltag effizienter zu gestalten.</p>
+        <h3>Willkommen bei paiya.ia</h3>
+        <p>Mit Paiya.ia hast du deinen Assistenten immer an deiner Seite.</p>
       </div>
       <div v-if="!useCase" class="central-usecases">
       <h3>Wähle einen Anwendungsfall</h3>
@@ -250,7 +250,7 @@ export default {
       showInfoModal: false,
       infoTexts: {
         Summary: "Mit dieser Funktion kannst du beliebige Texte automatisch zusammenfassen lassen – in kurz, mittel oder lang.",
-        Quiz: "Lass dich ein Quiz zu deinem Wunschthema erstellen und teste dein Wissen mit 10 Fragen! Einfach ein Thema auswählen oder dein eigenes Thema eingeben.",
+        Quiz: "Erstelle dein eigenes Quiz und teste dein Wissen mit 10 spannenden Fragen! Wähle ein Thema aus oder gib dein eigenes ein.",
         FreePrompt: "Chatte einfach mit paiya.ia!",
         FunFact: "Gib nur ein Wort ein und erhalte interessante Fakten zu verschiedenen Themen – mit Quellenangabe!"
       },
@@ -515,16 +515,6 @@ checkAnswer(quiz, selectedOption) {
   box-sizing: border-box;
 }
 
-:root {
-  --main-bg: #f0f4fa;
-  --sidebar-bg: #002c5f;
-  --primary-blue: #004080;
-  --primary-hover: #0055aa;
-  --bot-bubble: #e0e9f7;
-  --user-bubble: #6f96c1;
-  --quiz-yellow: #fff3cd;
-  --quiz-border: #ffeeba;
-}
 
 html, body {
   position: fixed;
@@ -537,11 +527,6 @@ html, body {
   background: #f3f3f3;
   overflow: hidden;
 }
-body {
-  background: var(--main-bg) !important;
-  color: #000 !important;
-}
-
 * {
   font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -577,7 +562,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: var(--main-bg);
+  background-color: #f0f4fa;
   height: 100%;
   overflow: hidden;
 }
@@ -585,8 +570,9 @@ body {
 .header {
   flex-shrink: 0;
   padding: 1rem;
-  background-color: #e0e9f7;
+  background-color: rgb(224, 233, 247);
   border-bottom: 1px solid #ccc;
+  border-bottom: 1px solid rgb(204, 204, 204);
 }
 
 .chatbox {
@@ -691,8 +677,8 @@ body {
 }
 
 .quiz-box {
-  background-color: #fff3cd;
-  border: 1px solid #ffeeba;
+  background-color: rgb(255, 243, 205);
+  border: 1px solid rgb(255, 238, 186);
   padding: 1rem;
   margin-top: 1rem;
   border-radius: 10px;
@@ -715,7 +701,7 @@ body {
 .quiz-box button {
   padding: 0.5rem 1rem;
   font-size: 1rem;
-  background-color: var(--primary-blue);
+  background-color: #004080;
   color: white;
   border: none;
   border-radius: 5px;
