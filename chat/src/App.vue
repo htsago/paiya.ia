@@ -75,7 +75,7 @@
 
 
       <div class="header">
-        <h3>Willkommen bei paiya.ia</h3>
+        <h3>Willkommen bei paiya.ai</h3>
         <p>Mit Paiya.ia hast du deinen Assistenten immer an deiner Seite.</p>
       </div>
       <div v-if="!useCase" class="central-usecases">
