@@ -222,6 +222,11 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
+marked.setOptions({
+  breaks: true,
+  gfm: true
+});
+
 export default {
   data() {
     return {
@@ -372,7 +377,7 @@ export default {
       length: this.length || undefined,
       provider: this.provider,
       model: this.model,
-      messages: this.getContextMessages().slice(-10)
+      messages: this.getContextMessages().slice(-20)
     })
   });
 
@@ -627,10 +632,11 @@ html, body {
   padding: 0.75rem;
   border-radius: 10px;
   word-wrap: break-word;
-  white-space: pre-wrap;
+   white-space: normal;
   background-color: #e0e9f7;
   color: #000;
   text-align: justify;
+  line-height: 1.5;
 }
 
 .chat-entry.user .bubble {
@@ -889,6 +895,36 @@ html, body {
   .bubble {
     max-width: 100%;
   }
+.bubble p {
+  margin: 0.5rem 0;
+}
+
+.bubble ul,
+.bubble ol {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.bubble li {
+  margin-bottom: 0.3rem;
+}
+
+.bubble pre {
+  background: #f4f4f4;
+  padding: 0.75rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: monospace;
+  white-space: pre-wrap;
+  margin: 0.5rem 0;
+}
+
+.bubble code {
+  background: #eee;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: monospace;
+}
 
   .controls {
     padding: 0.5rem;
@@ -982,6 +1018,144 @@ html, body {
   border-radius: 6px;
   font-weight: bold;
   cursor: pointer;
+}
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #1e1e1e;
+    color: #eee;
+  }
+
+  #app {
+    background-color: #2c2c2c;
+  }
+
+  .sidebar {
+    background-color: #121a28;
+    color: #fff;
+  }
+
+  .main {
+    background-color: #1e1e1e;
+  }
+
+  .header {
+    background-color: #1b3a57;
+    color: #eee;
+  }
+
+  .chatbox {
+    background-color: #2c2c2c;
+  }
+
+  .bubble {
+    background-color: #3b3f4c;
+    color: #eee;
+  }
+
+  .chat-entry.user .bubble {
+    background-color: #1b3a57;
+    color: #fff;
+  }
+
+  .tile-button,
+  .usecase-tile,
+  .central-usecase-tile {
+    background-color: #1b3a57;
+    color: #fff;
+  }
+
+  .tile-button:hover,
+  .usecase-tile:hover,
+  .central-usecase-tile:hover {
+    background-color: #224765;
+  }
+
+  .tile-button.active,
+  .usecase-tile.active {
+    background-color: #16314a;
+    font-weight: bold;
+    box-shadow: inset 0 0 0 2px #fff;
+  }
+
+  .tile-label {
+    color: #ccc;
+  }
+
+  .tile-scroll-list {
+    background-color: #1e1e1e;
+  }
+
+  .tile-scroll-list::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .central-usecase-tile {
+    border: 1px solid #224765;
+  }
+
+  .source {
+    color: #aaa;
+  }
+
+  .source a {
+    color: #5db4ff;
+  }
+
+  .quiz-box {
+    background-color: #3d3d3d;
+    border-color: #555;
+    color: #eee;
+  }
+
+  .controls {
+    background-color: #1b3a57;
+  }
+
+  .controls textarea,
+  .controls input,
+  .controls select {
+    background-color: #444;
+    color: #fff;
+    border: none;
+  }
+
+  .controls button {
+    background-color: #1b3a57;
+    color: #fff;
+  }
+
+  .controls button:hover {
+    background-color: #224765;
+  }
+
+  .rating-below button.selected {
+    color: #1b3a57;
+  }
+
+  .quiz-result-popup {
+    background-color: #1f1f1f;
+    color: #fff;
+  }
+
+  .quiz-result-popup button {
+    background-color: #fff;
+    color: #1b3a57;
+  }
+
+  .usecase-info-modal {
+    background-color: #1f1f1f;
+    color: #fff;
+  }
+
+  .usecase-info-modal button {
+    background-color: #fff;
+    color: #1b3a57;
+  }
+
+  .quiz-warning-banner {
+    background-color: #4caf50;
+    color: #fff;
+  }
 }
 
 </style>
