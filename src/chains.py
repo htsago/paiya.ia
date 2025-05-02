@@ -1,23 +1,28 @@
 import re
 import json
 import logging
+import os
 from typing import List
 
+import requests
 from dotenv import load_dotenv
 from groq import Groq
+import google.generativeai as genai
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, Field
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_core.exceptions import OutputParserException
+from mistralai import Mistral
 
+# Assuming src.validators exists; replace with actual implementation if needed
 from src.validators import validate_response
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-embedding = OpenAIEmbeddings()
+embedding = OpenAIEmbeddings()  # Note: Currently unused; consider removing if not needed
 
 ##########################
 # CLEAN JSON OUTPUT      #
@@ -26,13 +31,13 @@ embedding = OpenAIEmbeddings()
 def clean_json_output(text: str) -> str:
     if not isinstance(text, str):
         return text
-    match = re.search(r"\{.*?\}", text, re.DOTALL)
-    if match:
-        return match.group().strip()
-    text = re.sub(r"^```(?:json|python)?\s*", "", text.strip(), flags=re.IGNORECASE | re.MULTILINE)
-    text = re.sub(r"```$", "", text.strip(), flags=re.MULTILINE)
+    # Remove code fences and language specifiers
+    text = re.sub(r"^```(?:json|python)?\s*|\s*```$", "", text.strip(), flags=re.MULTILINE)
+    # Remove surrounding quotes
     text = re.sub(r"^['\"]{1,3}|['\"]{1,3}$", "", text.strip())
-    return text.strip()
+    # Extract JSON object or array
+    match = re.search(r"(\{.*?\}|\[.*?\])", text, re.DOTALL)
+    return match.group().strip() if match else text.strip()
 
 ##########################
 # VALIDATION             #
@@ -51,15 +56,38 @@ def validate_input(user_input):
 def get_llm(provider=None, model=None, temperature=0.1):
     default_models = {
         "openai": "gpt-4o",
-        "groq": "deepseek-r1-distill-llama-70b"
+        "groq": "deepseek-r1-distill-llama-70b",
+        "google": "gemini-2.0-flash",
+        "mistral": "mistral-large-latest"
     }
 
-    model = model or default_models.get(provider, "deepseek-r1-distill-llama-70b")
+    model = model or default_models.get(provider, "gemini-2.0-flash")
 
     if provider == "groq":
         return {
             "provider": "groq",
             "client": Groq(),
+            "model": model,
+            "temperature": temperature
+        }
+    elif provider == "google":
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY not found in environment variables")
+        genai.configure(api_key=api_key)
+        return {
+            "provider": "google",
+            "client": genai.GenerativeModel(model_name=model),
+            "model": model,
+            "temperature": temperature
+        }
+    elif provider == "mistral":
+        api_key = os.getenv("MISTRAL_API_KEY")
+        if not api_key:
+            raise ValueError("MISTRAL_API_KEY not found in environment variables")
+        return {
+            "provider": "mistral",
+            "client": Mistral(api_key=api_key),
             "model": model,
             "temperature": temperature
         }
@@ -127,7 +155,6 @@ Antwortformat im JSON:
     partial_variables={"format_instructions": quiz_parser.get_format_instructions()}
 )
 
-
 class FunFactResponse(BaseModel):
     fact: str = Field(description="Ein interessanter Fakt")
     source: str = Field(description="Quelle des Fakts")
@@ -138,7 +165,7 @@ fun_fact_prompt = PromptTemplate(
     template="""
 Gib mir einen interessanten Fun Fact basierend auf dem Wort: {word}. 
 
-Wähle nur verlässliche und öffentlich erreichbare Quellen. Überprüfe vor dem Bereitstellen, ob die Quelle tatsächlich erreichbar ist (z. B. durch einen erfolgreichen Zugriff oder HEAD-Request).
+Wähle nur verlässliche und öffentlich erreichbare Quellen.
 
 Antwortformat im JSON:
 {{ "fact": "...", "source": "..." }}
@@ -150,7 +177,7 @@ Antwortformat im JSON:
 )
 
 ##########################
-# GROQ DIRECT CALLS      #
+# PROVIDER API CALLS     #
 ##########################
 
 REASONING_SUPPORTED_MODELS = {
@@ -174,17 +201,73 @@ def call_groq(prompt: str, client, model, temperature):
     response = client.chat.completions.create(**request_body)
     return response.choices[0].message.content.strip()
 
+def call_google(prompt: str, client, model, temperature):
+    try:
+        generation_config = {
+            "temperature": temperature,
+            "top_p": 0.95,
+            "max_output_tokens": 1024
+        }
+        
+        response = client.generate_content(
+            contents=prompt,
+            generation_config=generation_config
+        )
+        
+        if response.text:
+            return response.text.strip()
+        else:
+            raise ValueError("No text in Gemini response")
+            
+    except Exception as e:
+        logging.error(f"Google API error: {e}")
+        raise
 
-def get_fun_fact_groq(word: str, client, model, temperature):
+def call_mistral(prompt: str, client, model, temperature):
+    try:
+        response = client.chat.complete(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            top_p=0.95,
+            max_tokens=1024
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        else:
+            raise ValueError("No content in Mistral response")
+    except Exception as e:
+        logging.error(f"Mistral API error: {e}")
+        raise
+
+##########################
+# PROVIDER-AGNOSTIC CALLS #
+##########################
+
+def get_free_prompt_groq(question: str, client, model, temperature, provider="groq"):
+    prompt = f"Beantworte ehrlich und hilfreich: {question}"
+    if provider == "groq":
+        raw = call_groq(prompt, client, model, temperature)
+    elif provider == "google":
+        raw = call_google(prompt, client, model, temperature)
+    elif provider == "mistral":
+        raw = call_mistral(prompt, client, model, temperature)
+    return clean_json_output(raw)
+
+def get_summary_groq(text: str, length: str, client, model, temperature, provider="groq"):
     prompt = f"""
-Gib mir einen interessanten Fun Fact basierend auf dem Wort: {word}. 
+Fasse den folgenden Text in einer {length}-Zusammenfassung zusammen. Antworte im JSON-Format:
+{{ "summary": "..." }}
 
-Wähle nur verlässliche und öffentlich erreichbare Quellen. Überprüfe vor dem Bereitstellen, ob die Quelle tatsächlich erreichbar ist (z. B. durch einen erfolgreichen Zugriff oder HEAD-Request).
-
-Antwortformat im JSON:
-{{ "fact": "...", "source": "..." }}
+Text:
+{text}
 """
-    raw = call_groq(prompt, client, model, temperature)
+    if provider == "groq":
+        raw = call_groq(prompt, client, model, temperature)
+    elif provider == "google":
+        raw = call_google(prompt, client, model, temperature)
+    elif provider == "mistral":
+        raw = call_mistral(prompt, client, model, temperature)
     cleaned = clean_json_output(raw)
     try:
         return json.loads(cleaned)
@@ -192,7 +275,7 @@ Antwortformat im JSON:
         logging.error(f"Ungültige JSON-Antwort: {cleaned}")
         return {"error": "Ungültige Antwort vom Modell"}
 
-def get_quiz_groq(topic: str, client, model, temperature, messages: list = None):
+def get_quiz_groq(topic: str, client, model, temperature, messages: list = None, provider="groq"):
     prompt_topic = build_chat_context(messages or [], topic)
     prompt = f"""Du bist ein Quiz-Generator. Dein Ziel ist es, eine **einzigartige Multiple-Choice-Frage** zu stellen, die sich **inhaltlich klar von vorherigen Fragen unterscheidet**.
 
@@ -217,7 +300,12 @@ def get_quiz_groq(topic: str, client, model, temperature, messages: list = None)
       "explanation": "..."
     }}
     """
-    raw = call_groq(prompt, client, model, temperature)
+    if provider == "groq":
+        raw = call_groq(prompt, client, model, temperature)
+    elif provider == "google":
+        raw = call_google(prompt, client, model, temperature)
+    elif provider == "mistral":
+        raw = call_mistral(prompt, client, model, temperature)
     cleaned = clean_json_output(raw)
     try:
         return json.loads(cleaned)
@@ -225,27 +313,27 @@ def get_quiz_groq(topic: str, client, model, temperature, messages: list = None)
         logging.error(f"Ungültige JSON-Antwort: {cleaned}")
         return {"error": "Ungültige Antwort vom Modell"}
 
-
-def get_summary_groq(text: str, length: str, client, model, temperature):
+def get_fun_fact_groq(word: str, client, model, temperature, provider="groq"):
     prompt = f"""
-Fasse den folgenden Text in einer {length}-Zusammenfassung zusammen. Antworte im JSON-Format:
-{{ "summary": "..." }}
+Gib mir einen interessanten Fun Fact basierend auf dem Wort: {word}. 
 
-Text:
-{text}
+Wähle nur verlässliche und öffentlich erreichbare Quellen.
+
+Antwortformat im JSON:
+{{ "fact": "...", "source": "..." }}
 """
-    raw = call_groq(prompt, client, model, temperature)
+    if provider == "groq":
+        raw = call_groq(prompt, client, model, temperature)
+    elif provider == "google":
+        raw = call_google(prompt, client, model, temperature)
+    elif provider == "mistral":
+        raw = call_mistral(prompt, client, model, temperature)
     cleaned = clean_json_output(raw)
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         logging.error(f"Ungültige JSON-Antwort: {cleaned}")
         return {"error": "Ungültige Antwort vom Modell"}
-
-def get_free_prompt_groq(question: str, client, model, temperature):
-    prompt = f"Beantworte ehrlich und hilfreich: {question}"
-    raw = call_groq(prompt, client, model, temperature)
-    return clean_json_output(raw)
 
 ##########################
 # SAFE INVOKE HELPER     #
@@ -276,13 +364,13 @@ def main(user_query, use_case: str, extra_params=None, provider="openai"):
 
         llm = get_llm(provider=provider)
 
-        if isinstance(llm, dict) and llm.get("provider") == "groq":
+        if isinstance(llm, dict) and llm.get("provider") in ["groq", "google", "mistral"]:
             client = llm["client"]
             model = llm["model"]
             temperature = llm["temperature"]
 
             if use_case == "FreePrompt":
-                result = get_free_prompt_groq(validated_query, client, model, temperature)
+                result = get_free_prompt_groq(validated_query, client, model, temperature, provider=llm["provider"])
                 valid, msg = validate_response("FreePrompt", {"data": result})
                 if not valid:
                     return {"error": msg}
@@ -291,21 +379,21 @@ def main(user_query, use_case: str, extra_params=None, provider="openai"):
             elif use_case == "Summary":
                 if not extra_params or "length" not in extra_params:
                     raise ValueError("Länge der Zusammenfassung fehlt.")
-                result = get_summary_groq(validated_query, extra_params["length"], client, model, temperature)
+                result = get_summary_groq(validated_query, extra_params["length"], client, model, temperature, provider=llm["provider"])
                 valid, msg = validate_response("Summary", result)
                 if not valid:
                     return {"error": msg}
                 return {"type": "summary", **result}
 
             elif use_case == "Quiz":
-                result = get_quiz_groq(validated_query, client, model, temperature)
+                result = get_quiz_groq(validated_query, client, model, temperature, provider=llm["provider"])
                 valid, msg = validate_response("Quiz", result)
                 if not valid:
                     return {"error": msg}
                 return {"type": "quiz", **result}
 
             elif use_case == "FunFact":
-                result = get_fun_fact_groq(validated_query, client, model, temperature)
+                result = get_fun_fact_groq(validated_query, client, model, temperature, provider=llm["provider"])
                 valid, msg = validate_response("FunFact", result)
                 if not valid:
                     return {"error": msg}
@@ -361,4 +449,3 @@ def build_chat_context(messages: list, current_query: str = None) -> str:
     if current_query:
         history += f"\nuser: {current_query}"
     return history.strip()
-

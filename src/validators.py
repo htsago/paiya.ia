@@ -36,4 +36,13 @@ def validate_response(route_type, data):
     if not validator:
         return False, f"Keine Validierung für Typ: {route_type}"
 
-    return validator(data)
+    try:
+        result = validator(data)
+        if result is None:
+            return False, f"Validator {route_type} lieferte keine Antwort zurück."
+        return result
+    except Exception as e:
+        import logging
+        logging.exception(f"Fehler im Validator {route_type}")
+        return False, f"Validator-Fehler: {str(e)}"
+
