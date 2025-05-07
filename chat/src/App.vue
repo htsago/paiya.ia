@@ -117,31 +117,28 @@
         <div class="chat">
           <transition-group name="quiz" tag="div">
             <div
-              v-for="(entry, index) in messages.filter(
-                (e) => e.type !== 'hidden',
-              )"
+              v-for="(entry, index) in renderedMessages"
               :key="entry.type === 'quiz' ? `quiz-${index}` : `msg-${index}`"
             >
               <div
                 v-if="entry.type !== 'quiz'"
                 class="chat-entry"
-                :class="{ 'chat-entry-user': entry.sender === 'user', 'chat-entry-bot': entry.sender === 'bot' }"
+                :class="{
+                  'chat-entry-user': entry.sender === 'user',
+                  'chat-entry-bot': entry.sender === 'bot',
+                }"
               >
                 <div class="avatar" v-if="entry.sender === 'bot'">
-                  <img
-                    :src="botAvatar"
-                    alt="Bot"
-                    class="avatar-img"
-                  />
+                  <img :src="botAvatar" alt="Bot" class="avatar-img" />
                 </div>
 
                 <div class="message-content">
                   <div class="bubble">
                     <template v-if="typeof entry.text === 'string'">
-                      <div v-html="renderMarkdown(entry.text)"></div>
+                      <div v-html="entry.renderedText"></div>
                     </template>
                     <template v-else>
-                      <div v-html="renderMarkdown(entry.text.text)"></div>
+                      <div v-html="entry.renderedText"></div>
                       <div class="source">
                         Quelle:
                         <a
@@ -207,19 +204,28 @@
 
               <div v-else class="quiz-box">
                 <div class="quiz-progress">
-                  Frage {{ messages.filter(m => m.type === 'quiz').indexOf(entry) + 1 }} von 10
+                  Frage
+                  {{ messages.filter((m) => m.type === "quiz").indexOf(entry) + 1 }}
+                  von 10
                 </div>
                 <h3>{{ entry.quiz.question }}</h3>
                 <transition-group name="option" tag="ul">
                   <li
                     v-for="(opt, i) in entry.quiz.options"
                     :key="`option-${i}`"
-                    :class="{ 'selected': entry.quiz.selected === opt }"
+                    :class="{ selected: entry.quiz.selected === opt }"
                   >
                     <button
                       @click="checkAnswer(entry.quiz, opt)"
                       :disabled="entry.quiz.selected !== null"
-                      :class="{ 'correct': entry.quiz.selected === opt && opt === entry.quiz.answer, 'incorrect': entry.quiz.selected === opt && opt !== entry.quiz.answer }"
+                      :class="{
+                        correct:
+                          entry.quiz.selected === opt &&
+                          opt === entry.quiz.answer,
+                        incorrect:
+                          entry.quiz.selected === opt &&
+                          opt !== entry.quiz.answer,
+                      }"
                     >
                       {{ opt }}
                     </button>
@@ -267,13 +273,21 @@
                   ? 'Thema für das Quiz eingeben (z.B. Französischer Käse)'
                   : 'Stelle eine Frage oder gib einen Prompt ein'
               "
-              :disabled="!useCase || isChatLocked || (useCase === 'Quiz' && isQuizInputLocked)"
+              :disabled="
+                !useCase ||
+                isChatLocked ||
+                (useCase === 'Quiz' && isQuizInputLocked)
+              "
               @keyup.enter.exact="handleEnter"
             />
             <button
               class="chat-send-button"
               @click="sendQuery"
-              :disabled="!useCase || isChatLocked || (useCase === 'Quiz' && isQuizInputLocked)"
+              :disabled="
+                !useCase ||
+                isChatLocked ||
+                (useCase === 'Quiz' && isQuizInputLocked)
+              "
             >
               ➤
             </button>
@@ -300,12 +314,26 @@
 </template>
 
 <script>
-import { marked } from "marked";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkRehype from "remark-rehype";
+import rehypePrism from "rehype-prism";
+import rehypeStringify from "rehype-stringify";
+import Prism from "prismjs";
+import "prismjs/themes/prism-coy.css";
+import "prismjs/plugins/line-numbers/prism-line-numbers.css";
+import "prismjs/components/prism-go";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-lua";
 import DOMPurify from "dompurify";
 
-marked.setOptions({
-  breaks: true,
-  gfm: true,
+// Standard-Sprache für Prism.js auf Lua setzen
+Prism.hooks.add("before-highlight", (env) => {
+  if (!env.language || !Prism.languages[env.language]) {
+    env.language = "lua";
+    env.element.className = env.element.className.replace(/\blanguage-\w+\b/g, '') + " language-lua";
+  }
 });
 
 export default {
@@ -375,6 +403,8 @@ export default {
       botAvatar: "https://cdn-icons-png.flaticon.com/512/4712/4712107.png",
       userAvatar: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
       quizTopic: "",
+      renderedMessages: [],
+      copyFeedback: {},
     };
   },
   mounted() {
@@ -387,6 +417,12 @@ export default {
   watch: {
     provider(newProvider) {
       this.model = this.availableModels[newProvider][0];
+    },
+    messages: {
+      handler(newMessages) {
+        this.renderMessages();
+      },
+      deep: true,
     },
   },
   computed: {
@@ -442,6 +478,8 @@ export default {
       this.quizStarted = false;
       this.isQuizInputLocked = false;
       this.quizTopic = "";
+      this.renderedMessages = [];
+      this.copyFeedback = {};
     },
     acknowledgeInfo() {
       this.infoAcknowledged[this.useCase] = true;
@@ -455,7 +493,12 @@ export default {
       });
     },
     handleEnter() {
-      if (!this.query || !this.useCase || (this.useCase === 'Quiz' && this.isQuizInputLocked)) return;
+      if (
+        !this.query ||
+        !this.useCase ||
+        (this.useCase === "Quiz" && this.isQuizInputLocked)
+      )
+        return;
       this.sendQuery();
     },
     backToMenu() {
@@ -505,15 +548,21 @@ export default {
         const lastQuiz = [...this.messages]
           .reverse()
           .find((m) => m.type === "quiz");
-        if (lastQuiz && lastQuiz.quiz && lastQuiz.quiz.selected === null && !isNextQuestion) {
-          this.showQuizWarning("Bitte beantworte zuerst die aktuelle Quizfrage.");
+        if (
+          lastQuiz &&
+          lastQuiz.quiz &&
+          lastQuiz.quiz.selected === null &&
+          !isNextQuestion
+        ) {
+          this.showQuizWarning(
+            "Bitte beantworte zuerst die aktuelle Quizfrage.",
+          );
           return;
         }
         if (!this.quizStarted) {
           this.quizStarted = true;
           this.isQuizInputLocked = true;
           this.quizTopic = this.query;
-          // Nur beim ersten Quiz-Start die Benutzereingabe anzeigen
           this.messages.push({
             sender: "user",
             type: "text",
@@ -522,7 +571,6 @@ export default {
           });
         }
       } else {
-        // Für andere Modi die Benutzereingabe immer anzeigen
         this.messages.push({
           sender: "user",
           type: "text",
@@ -557,7 +605,9 @@ export default {
 
         if (result.error) {
           if (result.error.includes("rate limit")) {
-            alert("Rate limit erreicht. Bitte versuche es in einer Minute erneut.");
+            alert(
+              "Rate limit erreicht. Bitte versuche es in einer Minute erneut.",
+            );
           } else {
             this.messages.push({
               sender: "bot",
@@ -717,8 +767,97 @@ export default {
           console.error("Fehler beim Feedback-Update:", err);
         });
     },
-    renderMarkdown(text) {
-      return DOMPurify.sanitize(marked(text));
+    async renderMarkdown(text) {
+      if (!text) return "";
+      try {
+        const processor = unified()
+          .use(remarkParse)
+          .use(remarkRehype)
+          .use(rehypePrism, { showLineNumbers: true })
+          .use(rehypeStringify);
+
+        const html = await processor.process(text);
+        let sanitized = DOMPurify.sanitize(String(html));
+
+        // Sicherstellen, dass Code-Blöcke ohne Sprache die Klasse "language-lua" erhalten
+        sanitized = sanitized.replace(
+          /<pre><code(?!.*class="language-)/g,
+          '<pre><code class="language-lua"'
+        );
+
+        return sanitized;
+      } catch (error) {
+        console.error("Fehler beim Rendern von Markdown:", error);
+        return DOMPurify.sanitize(text); // Fallback: Roher Text
+      }
+    },
+    async renderMessages() {
+      this.renderedMessages = [];
+      let codeBlockIndex = 0; // Zähler für eindeutige Code-Block-IDs
+
+      for (const message of this.messages.filter((e) => e.type !== "hidden")) {
+        if (message.type !== "quiz") {
+          let renderedText =
+            typeof message.text === "string"
+              ? await this.renderMarkdown(message.text)
+              : await this.renderMarkdown(message.text.text);
+
+          // Füge den "Copy"-Button zu jedem Code-Block hinzu
+          renderedText = renderedText.replace(
+            /<pre>/g,
+            () => {
+              const currentIndex = codeBlockIndex++;
+              return `<div class="code-block-wrapper"><button class="copy-button" data-code-id="${currentIndex}" @click="copyCode(${currentIndex})">${
+                this.copyFeedback[currentIndex] ? "✔ Kopiert!" : "📋 Kopieren"
+              }</button><pre>`;
+            }
+          );
+          renderedText = renderedText.replace(/<\/pre>/g, "</pre></div>");
+
+          this.renderedMessages.push({
+            ...message,
+            renderedText,
+          });
+        } else {
+          this.renderedMessages.push(message);
+        }
+      }
+      this.$nextTick(() => {
+        Prism.highlightAll();
+        // Vue-Event-Handler für dynamisch hinzugefügte Buttons binden
+        this.bindCopyButtonEvents();
+      });
+    },
+    bindCopyButtonEvents() {
+      // Entferne alte Event-Listener, um Mehrfachbindungen zu vermeiden
+      const buttons = document.querySelectorAll(".copy-button");
+      buttons.forEach((button) => {
+        const clone = button.cloneNode(true);
+        button.parentNode.replaceChild(clone, button);
+        clone.addEventListener("click", () => {
+          const codeId = clone.getAttribute("data-code-id");
+          this.copyCode(codeId);
+        });
+      });
+    },
+    copyCode(codeId) {
+      const codeBlockWrapper = document.querySelector(
+        `.code-block-wrapper button[data-code-id="${codeId}"]`
+      ).parentNode;
+      const codeElement = codeBlockWrapper.querySelector("pre code");
+      if (codeElement) {
+        const codeText = codeElement.innerText;
+
+        // Code in die Zwischenablage kopieren
+        navigator.clipboard.writeText(codeText).then(() => {
+          this.$set(this.copyFeedback, codeId, true);
+          setTimeout(() => {
+            this.$set(this.copyFeedback, codeId, false);
+          }, 2000); // Feedback für 2 Sekunden anzeigen
+        }).catch((err) => {
+          console.error("Fehler beim Kopieren:", err);
+        });
+      }
     },
     toggleSidebar() {
       this.isSidebarVisible = !this.isSidebarVisible;
@@ -1071,9 +1210,7 @@ body {
   padding: 0.75rem 1rem;
   border-radius: 8px;
   cursor: pointer;
-  transition:
-    background-color 0.2s,
-    transform 0.1s;
+  transition: background-color 0.2s, transform 0.1s;
   font-size: clamp(0.9rem, 2.5vw, 1rem);
 }
 
@@ -1366,7 +1503,8 @@ body {
 }
 
 @keyframes bounce {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
   }
   50% {
@@ -1375,10 +1513,12 @@ body {
 }
 
 @keyframes shake {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateX(0);
   }
-  25%, 75% {
+  25%,
+  75% {
     transform: translateX(-5px);
   }
   50% {
@@ -1457,10 +1597,7 @@ body {
   border-radius: 8px;
   padding: 0.25rem 0.5rem;
   cursor: pointer;
-  transition:
-    background-color 0.2s,
-    transform 0.1s,
-    border-color 0.2s;
+  transition: background-color 0.2s, transform 0.1s, border-color 0.2s;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1490,6 +1627,51 @@ body {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.3rem;
+}
+
+pre {
+  background: #f4f4f4;
+  padding: 1em;
+  border-radius: 5px;
+  overflow-x: auto;
+  margin: 1em 0;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.9em;
+}
+
+code {
+  background: none;
+  padding: 0;
+}
+
+/* Styling für den Code-Block-Wrapper und den Copy-Button */
+.code-block-wrapper {
+  position: relative;
+  margin: 1em 0;
+}
+
+.copy-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background-color: #004080;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  z-index: 10;
+}
+
+.copy-button:hover {
+  background-color: #0055aa;
+  transform: scale(1.05);
+}
+
+.copy-button:active {
+  transform: scale(0.95);
 }
 
 @media (max-width: 828px) {
@@ -1758,6 +1940,11 @@ body {
     font-size: 0.9rem;
     padding: 0.4rem 0.8rem;
   }
+
+  .copy-button {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.4rem;
+  }
 }
 
 @supports (padding: env(safe-area-inset-bottom)) {
@@ -1978,6 +2165,18 @@ body {
   .cancel-button:hover,
   .menu-button:hover {
     background-color: #9c3728;
+  }
+
+  pre {
+    background: #2d2d2d;
+  }
+
+  .copy-button {
+    background-color: #1b3a57;
+  }
+
+  .copy-button:hover {
+    background-color: #224765;
   }
 }
 </style>

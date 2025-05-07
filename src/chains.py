@@ -252,7 +252,7 @@ def get_free_prompt_groq(question: str, client, model, temperature, provider="gr
         raw = call_google(prompt, client, model, temperature)
     elif provider == "mistral":
         raw = call_mistral(prompt, client, model, temperature)
-    return clean_json_output(raw)
+    return raw
 
 def get_summary_groq(text: str, length: str, client, model, temperature, provider="groq"):
     prompt = f"""
@@ -268,7 +268,7 @@ Text:
         raw = call_google(prompt, client, model, temperature)
     elif provider == "mistral":
         raw = call_mistral(prompt, client, model, temperature)
-    cleaned = clean_json_output(raw)
+    cleaned = raw
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
